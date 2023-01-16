@@ -1,21 +1,19 @@
-const express = require('express');
-let axios = require('axios');
+const express = require("express");
+let axios = require("axios");
 var app = express();
-
-const ExpressError = require("./expressError")
+const { processData } = require("./data_processors");
+const ExpressError = require("./expressError");
 
 app.use(express.json());
 
-
-app.post('/', async function (req, res, next) {
+app.post("/", async function (req, res, next) {
   try {
-    let developers = req.body.developers;
-    let returnData = []
-    for (let d of developers) {
-      result = await axios.get(`https://api.github.com/users/${d}`);
-      returnData.push({ "name": result.data.name, "bio": result.data.bio })
-    }
-    return res.json(returnData);
+    const developers = req.body.developers;
+
+    const rawDeveloperData = getRawDeveloperDataFromGithub(developers);
+    const processedData = processData(rawDeveloperData);
+
+    return res.json(processedData);
   } catch (err) {
     return next(err);
   }
@@ -27,18 +25,23 @@ app.use((req, res, next) => {
   next(e);
 });
 
-//global error handler 
+//global error handler
 app.use(function (err, req, res, next) {
-
   let status = err.status || 500;
   let message = err.msg;
-  console.log(err)
+  console.log(err);
   return res.status(status).json({
-    error: { message, status }
+    error: { message, status },
   });
 });
 
-app.listen(3000, function () {
-  console.log('Listening on port 3000');
-});
+async function getRawDeveloperDataFromGithub(developers) {
+  const promises = developers.map((developer) => {
+    return axios.get(`https://api.github.com/users/${developer}`);
+  });
 
+  return (await Promise.allSettled(promises)).filter(
+    (r) => r.status === "fulfilled"
+  );
+}
+module.exports = app;

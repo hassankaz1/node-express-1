@@ -1,41 +1,48 @@
-const fs = require('fs');
-const process = require('process');
-const axios = require('axios');
+const fs = require("fs");
+const process = require("process");
+const axios = require("axios");
 
 //get path of text file from user input
 path = process.argv[2];
 
-let URLS = [];
+fs.readFile(path, "utf8", (err, data) => {
+  if (err) {
+    console.log(`not valid path: ${path}`, err);
+    process.exit(1);
+  }
+  //split string to get URLS and store in array
+  const urls = data.toString().split("\n");
+  createHTML(urls);
+});
 
+async function createHTML(urls) {
+  const pages = await pagesHtml(urls);
 
-fs.readFile(path, 'utf8', (err, data) => {
-    if (err) {
-        console.log(`not valid path: ${path}`, err);
-        process.exit(1);
+  for (let i = 0; i < urls.length; i++) {
+    if (pages[i].status === "rejected") {
+      console.log("Could not download: " + urls[i]);
+      continue;
     }
-    //split string to get URLS and store in array
-    URLS = data.toString().split("\n");
-    createHTML(URLS);
-})
 
+    const newFile = hostnameFromUrl(urls[i]);
 
+    fs.writeFile(newFile, pages[i].value.data, "utf8", (err) => {
+      if (err) {
+        console.log("error");
+      }
+      console.log(`Wrote to ${newFile}`);
+    });
+  }
+}
 
+function pagesHtml(urls) {
+  const promises = urls.map((url) => {
+    return axios.get(url);
+  });
 
-async function createHTML(links) {
-    for (let url of URLS) {
-        try {
-            let HTML = await axios.get(url);
-            let newFile = url.replace(/^(?:https?:\/\/)?(?:www\.)?/i, "").split('/')[0];
+  return Promise.allSettled(promises);
+}
 
-            fs.writeFile(newFile, HTML.data, "utf8", (err) => {
-                if (err) {
-                    console.log("error");
-                }
-                console.log(`Wrote to ${newFile}`);
-            })
-        }
-        catch (err) {
-            console.log(`Couldn't download ${url}`);
-        }
-    };
-};
+function hostnameFromUrl(url) {
+  return new URL(url).hostname;
+}
